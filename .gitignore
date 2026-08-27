@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+docs/schemas/dataset_procesado/
+docs/schemas/*.csv
+*.log
+.venv/
+venv/
+.env
