@@ -43,79 +43,80 @@ def sanitize_text(val):
 def parse_wazuh_event(raw_dict):
     res = {}
     
-    ts = raw_dict.get("timestamp")
+    ts = raw_dict.get("timestamp") or raw_dict.get("timestamp_utc") or raw_dict.get("@timestamp")
     if ts:
         dt = pd.to_datetime(ts, errors="coerce", utc=True)
         if pd.notnull(dt):
             res["timestamp_cest"] = dt.tz_convert("Europe/Madrid").strftime("%Y-%m-%d %H:%M:%S CEST")
             res["timestamp_utc"] = str(ts)
         else:
-            res["timestamp_cest"] = None
+            res["timestamp_cest"] = raw_dict.get("timestamp_cest", str(ts))
             res["timestamp_utc"] = str(ts)
     else:
-        res["timestamp_cest"] = None
+        res["timestamp_cest"] = raw_dict.get("timestamp_cest")
         res["timestamp_utc"] = None
 
-    agent = raw_dict.get("agent", {})
-    res["agent_id"] = sanitize_text(agent.get("id"))
-    res["agent_name"] = sanitize_text(agent.get("name"))
-    res["agent_ip"] = sanitize_text(agent.get("ip"))
+    agent = raw_dict.get("agent", {}) if isinstance(raw_dict.get("agent"), dict) else {}
+    res["agent_id"] = sanitize_text(agent.get("id") or raw_dict.get("agent_id"))
+    res["agent_name"] = sanitize_text(agent.get("name") or raw_dict.get("agent_name"))
+    res["agent_ip"] = sanitize_text(agent.get("ip") or raw_dict.get("agent_ip"))
 
-    rule = raw_dict.get("rule", {})
-    res["rule_id"] = sanitize_text(rule.get("id"))
-    res["rule_level"] = rule.get("level", 0)
-    res["rule_description"] = sanitize_text(rule.get("description"))
-    res["rule_firedtimes"] = rule.get("firedtimes", 1)
-    res["rule_groups"] = ",".join(rule.get("groups", [])) if isinstance(rule.get("groups"), list) else sanitize_text(rule.get("groups"))
+    rule = raw_dict.get("rule", {}) if isinstance(raw_dict.get("rule"), dict) else {}
+    res["rule_id"] = sanitize_text(rule.get("id") or raw_dict.get("rule_id"))
+    res["rule_level"] = rule.get("level") or raw_dict.get("rule_level", 0)
+    res["rule_description"] = sanitize_text(rule.get("description") or raw_dict.get("rule_description"))
+    res["rule_firedtimes"] = rule.get("firedtimes") or raw_dict.get("rule_firedtimes", 1)
     
-    mitre = rule.get("mitre", {})
-    res["mitre_id"] = ",".join(mitre.get("id", [])) if isinstance(mitre.get("id"), list) else sanitize_text(mitre.get("id"))
-    res["mitre_tactic"] = ",".join(mitre.get("tactic", [])) if isinstance(mitre.get("tactic"), list) else sanitize_text(mitre.get("tactic"))
-    res["mitre_technique"] = ",".join(mitre.get("technique", [])) if isinstance(mitre.get("technique"), list) else sanitize_text(mitre.get("technique"))
+    rg = rule.get("groups") or raw_dict.get("rule_groups", [])
+    res["rule_groups"] = ",".join(rg) if isinstance(rg, list) else sanitize_text(rg)
     
-    res["compliance_pci"] = ",".join(rule.get("pci_dss", [])) if isinstance(rule.get("pci_dss"), list) else sanitize_text(rule.get("pci_dss"))
-    res["compliance_gdpr"] = ",".join(rule.get("gdpr", [])) if isinstance(rule.get("gdpr"), list) else sanitize_text(rule.get("gdpr"))
+    mitre = rule.get("mitre", {}) if isinstance(rule.get("mitre"), dict) else {}
+    res["mitre_id"] = ",".join(mitre.get("id", [])) if isinstance(mitre.get("id"), list) else sanitize_text(mitre.get("id") or raw_dict.get("mitre_id"))
+    res["mitre_tactic"] = ",".join(mitre.get("tactic", [])) if isinstance(mitre.get("tactic"), list) else sanitize_text(mitre.get("tactic") or raw_dict.get("mitre_tactic"))
+    res["mitre_technique"] = ",".join(mitre.get("technique", [])) if isinstance(mitre.get("technique"), list) else sanitize_text(mitre.get("technique") or raw_dict.get("mitre_technique"))
+    
+    pci = rule.get("pci_dss") or raw_dict.get("compliance_pci", [])
+    res["compliance_pci"] = ",".join(pci) if isinstance(pci, list) else sanitize_text(pci)
+    
+    gdpr = rule.get("gdpr") or raw_dict.get("compliance_gdpr", [])
+    res["compliance_gdpr"] = ",".join(gdpr) if isinstance(gdpr, list) else sanitize_text(gdpr)
 
-    predecoder = raw_dict.get("predecoder", {})
-    res["program_name"] = sanitize_text(predecoder.get("program_name"))
-    res["hostname"] = sanitize_text(predecoder.get("hostname"))
+    predecoder = raw_dict.get("predecoder", {}) if isinstance(raw_dict.get("predecoder"), dict) else {}
+    res["program_name"] = sanitize_text(predecoder.get("program_name") or raw_dict.get("program_name"))
 
-    decoder = raw_dict.get("decoder", {})
-    res["decoder_name"] = sanitize_text(decoder.get("name"))
+    data = raw_dict.get("data", {}) if isinstance(raw_dict.get("data"), dict) else {}
+    res["srcuser"] = sanitize_text(data.get("srcuser") or raw_dict.get("srcuser"))
+    res["dstuser"] = sanitize_text(data.get("dstuser") or raw_dict.get("dstuser"))
+    res["uid"] = sanitize_text(data.get("uid") or raw_dict.get("uid"))
+    res["command"] = sanitize_text(data.get("command") or raw_dict.get("command"))
 
-    data = raw_dict.get("data", {})
-    res["srcuser"] = sanitize_text(data.get("srcuser"))
-    res["dstuser"] = sanitize_text(data.get("dstuser"))
-    res["uid"] = sanitize_text(data.get("uid"))
-    res["command"] = sanitize_text(data.get("command"))
+    syscheck = raw_dict.get("syscheck", {}) if isinstance(raw_dict.get("syscheck"), dict) else {}
+    res["file_path"] = sanitize_text(syscheck.get("path") or raw_dict.get("file_path"))
+    res["fim_event"] = sanitize_text(syscheck.get("event") or raw_dict.get("fim_event"))
+    res["file_sha256"] = sanitize_text(syscheck.get("sha256_after") or raw_dict.get("file_sha256"))
+    res["file_size"] = syscheck.get("size_after") or raw_dict.get("file_size")
 
-    syscheck = raw_dict.get("syscheck", {})
-    res["file_path"] = sanitize_text(syscheck.get("path"))
-    res["fim_event"] = sanitize_text(syscheck.get("event"))
-    res["file_sha256"] = sanitize_text(syscheck.get("sha256_after"))
-    res["file_size"] = syscheck.get("size_after")
+    virustotal = data.get("virustotal", {}) if isinstance(data.get("virustotal"), dict) else {}
+    res["vt_positives"] = virustotal.get("positives") or raw_dict.get("vt_positives")
+    res["vt_total"] = virustotal.get("total") or raw_dict.get("vt_total")
+    res["vt_malicious"] = virustotal.get("malicious") or raw_dict.get("vt_malicious")
+    vt_src = virustotal.get("source", {}) if isinstance(virustotal.get("source"), dict) else {}
+    res["vt_file"] = sanitize_text(vt_src.get("file") or raw_dict.get("vt_file"))
+    res["vt_permalink"] = sanitize_text(virustotal.get("permalink") or raw_dict.get("vt_permalink"))
 
-    virustotal = data.get("virustotal", {})
-    res["vt_positives"] = virustotal.get("positives")
-    res["vt_total"] = virustotal.get("total")
-    res["vt_malicious"] = virustotal.get("malicious")
-    vt_source = virustotal.get("source", {})
-    res["vt_file"] = sanitize_text(vt_source.get("file"))
-    res["vt_permalink"] = sanitize_text(virustotal.get("permalink"))
-
-    net_id = data.get("id", {})
-    res["src_ip"] = sanitize_text(net_id.get("orig_h"))
-    res["src_port"] = net_id.get("orig_p")
-    res["dst_ip"] = sanitize_text(net_id.get("resp_h"))
-    res["dst_port"] = net_id.get("resp_p")
-    res["protocol"] = sanitize_text(data.get("proto"))
-    res["service"] = sanitize_text(data.get("service"))
-    res["duration"] = data.get("duration")
-    res["orig_bytes"] = data.get("orig_bytes")
-    res["resp_bytes"] = data.get("resp_bytes")
-    res["orig_pkts"] = data.get("orig_pkts")
-    res["resp_pkts"] = data.get("resp_pkts")
-    res["conn_state"] = sanitize_text(data.get("conn_state"))
+    net_id = data.get("id", {}) if isinstance(data.get("id"), dict) else {}
+    res["src_ip"] = sanitize_text(net_id.get("orig_h") or raw_dict.get("src_ip"))
+    res["src_port"] = net_id.get("orig_p") or raw_dict.get("src_port")
+    res["dst_ip"] = sanitize_text(net_id.get("resp_h") or raw_dict.get("dst_ip"))
+    res["dst_port"] = net_id.get("resp_p") or raw_dict.get("dst_port")
+    res["protocol"] = sanitize_text(data.get("proto") or raw_dict.get("protocol"))
+    res["service"] = sanitize_text(data.get("service") or raw_dict.get("service"))
+    res["duration"] = data.get("duration") or raw_dict.get("duration")
+    res["orig_bytes"] = data.get("orig_bytes") or raw_dict.get("orig_bytes")
+    res["resp_bytes"] = data.get("resp_bytes") or raw_dict.get("resp_bytes")
+    res["orig_pkts"] = data.get("orig_pkts") or raw_dict.get("orig_pkts")
+    res["resp_pkts"] = data.get("resp_pkts") or raw_dict.get("resp_pkts")
+    res["conn_state"] = sanitize_text(data.get("conn_state") or raw_dict.get("conn_state"))
 
     if res["vt_positives"] is not None:
         res["event_type"] = "host_virustotal"
@@ -126,7 +127,7 @@ def parse_wazuh_event(raw_dict):
     elif res["src_ip"] is not None or res["protocol"] is not None:
         res["event_type"] = "network_zeek"
     else:
-        res["event_type"] = "host_system"
+        res["event_type"] = raw_dict.get("event_type", "host_system")
 
     res["location"] = sanitize_text(raw_dict.get("location"))
     res["full_log"] = sanitize_text(raw_dict.get("full_log"))
@@ -142,8 +143,9 @@ def process_and_persist_batch(batch_df, batch_id):
     for r in raw_rows:
         if r.raw_json:
             try:
-                ev = parse_wazuh_event(json.loads(r.raw_json))
-                if ev["event_type"] == "network_zeek" and (ev["dst_port"] == 5353 or ev["src_port"] == 5353):
+                data_obj = json.loads(r.raw_json) if isinstance(r.raw_json, str) else r.raw_json
+                ev = parse_wazuh_event(data_obj)
+                if ev["event_type"] == "network_zeek" and (ev.get("dst_port") == 5353 or ev.get("src_port") == 5353):
                     continue
                 parsed_events.append(ev)
             except Exception:
